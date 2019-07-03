@@ -1,0 +1,160 @@
+<html>
+  <head>
+<style>
+</style>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/axios/0.18.0/axios.js'></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://unpkg.com/react@16/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js" crossorigin></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/react-router-dom/5.0.0/react-router-dom.js'></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/redux/4.0.1/redux.js'></script>
+  </head>
+  <body>
+    <div id='root'></div>
+    <script type='text/babel'>
+      const { HashRouter, Link, Route } = ReactRouterDOM;
+      
+      const store = Redux.createStore(( state = [], action)=> {
+        switch(action.type){
+          case 'SET_THINGS':
+            state = action.things;
+            break;
+          case 'CREATE_THING':
+            state = [...state, action.thing];
+            break;
+          case 'DESTROY_THING':
+            state = state.filter( thing => action.thing.id !== thing.id);
+        }
+        return state;
+      });
+
+      const start = async()=> {
+        const response = await axios.get('/api/things');
+        store.dispatch({ type: 'SET_THINGS', things: response.data });
+      };
+
+      start();
+
+      class Nav extends React.Component{
+        constructor(){
+          super();
+          this.state = {
+            things: store.getState() 
+          };
+        }
+        componentDidMount(){
+          store.subscribe(()=> {
+            this.setState({ things: store.getState()});
+          });
+        }
+        render(){
+          const { things } = this.state;
+          const { pathname } = this.props.location;
+          return (
+            <div>
+              <Link to='/' style={{ fontWeight: pathname === '/' ? 'bold': ''}}>Home</Link>
+              { ' ' }
+              <Link to='/things' style={{ fontWeight: pathname === '/things' ? 'bold': ''}}>Things ({ things.length })</Link>
+            </div>
+          );
+        }
+      }
+      class Things extends React.Component{
+        constructor(){
+          super();
+          this.state = {
+            things: store.getState() 
+          };
+        }
+        async destroyThing(thing){
+          await axios.delete(`/api/things/${thing.id}`);
+          store.dispatch({
+            type: 'DESTROY_THING',
+            thing
+          });
+        }
+        componentDidMount(){
+          console.log(store.getState());
+          this.unsubscribe = store.subscribe(()=> {
+            this.setState({ things: store.getState()});
+          });
+        }
+        componentWillUnmount(){
+          this.unsubscribe();
+        }
+        render(){
+          const { things } = this.state;
+          const { destroyThing } = this;
+          return (
+            <ul>
+              {
+                things.map( thing => <li onClick={ ()=> destroyThing(thing) } key={ thing.id }>{ thing.name }</li>)
+              }
+            </ul>
+          );
+        }
+      }
+
+      /*
+      const Things = ({ things, destroyThing })=> {
+        return (
+          <ul>
+            { things.map( thing => <li key={ thing.id} onClick={()=> destroyThing(thing)}> { thing.name }</li>) }
+          </ul>
+        );
+      };
+      class App extends React.Component{
+        constructor(){
+          super();
+          this.state = {
+            things: []
+          };
+          this.destroyThing = this.destroyThing.bind(this);
+        }
+        async destroyThing(thing){
+          const response = await axios.delete(`/api/things/${thing.id}`);
+          const things = this.state.things.filter( t => t.id !== thing.id);
+          this.setState({ things });
+        }
+        async componentDidMount(){
+          const response = await axios.get('/api/things');
+          this.setState({ things: response.data });
+        }
+        render(){
+          const { things } = this.state;
+          const { destroyThing } = this;
+          return (
+            <HashRouter>
+              <Route render = {({ location })=> <Nav things={ things } pathname={location.pathname}/>} />
+              <Route path='/things' render={ ()=> <Things destroyThing={ destroyThing } things={ things}/>} />
+              
+            </HashRouter>
+          );
+        }
+      }
+      */
+
+      const Home = ()=> {
+        const createThing = async()=> {
+          const response = await axios.post('/api/things');
+          store.dispatch({ type: 'CREATE_THING', thing: response.data });
+        };
+        return (
+          <button onClick={ createThing }>Create New Thing</button>
+        );
+      }
+
+      const App = ()=> {
+        return (
+          <HashRouter>
+            <Route component={ Nav } />
+            <Route path='/' exact component={ Home } />
+            <Route path='/things' component={ Things } />
+          </HashRouter>
+        );
+      };
+      const root = document.querySelector('#root');
+      ReactDOM.render(<App />, root);
+    </script>
+  </body>
+</html>
